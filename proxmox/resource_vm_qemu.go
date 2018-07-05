@@ -2,7 +2,7 @@ package proxmox
 
 import (
 	"fmt"
-	pxapi "github.com/Telmate/proxmox-api-go/proxmox"
+	pxapi "github.com/AAbouZaid/proxmox-api-go/proxmox"
 	"github.com/hashicorp/terraform/helper/schema"
 	"log"
 	"path"
@@ -35,10 +35,6 @@ func resourceVmQemu() *schema.Resource {
 				},
 			},
 			"target_node": {
-				Type:     schema.TypeString,
-				Required: true,
-			},
-			"ssh_forward_ip": {
 				Type:     schema.TypeString,
 				Required: true,
 			},
@@ -96,19 +92,6 @@ func resourceVmQemu() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
-				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
-					return strings.TrimSpace(old) == strings.TrimSpace(new)
-				},
-			},
-			"ssh_user": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: true,
-			},
-			"ssh_private_key": {
-				Type:      schema.TypeString,
-				Optional:  true,
-				Sensitive: true,
 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
 					return strings.TrimSpace(old) == strings.TrimSpace(new)
 				},

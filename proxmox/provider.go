@@ -2,7 +2,7 @@ package proxmox
 
 import (
 	"fmt"
-	pxapi "github.com/Telmate/proxmox-api-go/proxmox"
+	pxapi "github.com/AAbouZaid/proxmox-api-go/proxmox"
 	"github.com/hashicorp/terraform/helper/schema"
 	"regexp"
 	"strconv"
