@@ -77,16 +77,56 @@ func resourceVmQemu() *schema.Resource {
 			},
 			"nic": {
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
 			},
 			"bridge": {
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
 			},
 			"vlan": {
 				Type:     schema.TypeInt,
 				Optional: true,
 				Default:  -1,
+			},
+			"network": &schema.Schema{
+				Type:     schema.TypeSet,
+				Optional: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"id": &schema.Schema{
+							Type:     schema.TypeInt,
+							Required: true,
+						},
+						"model": &schema.Schema{
+							Type:     schema.TypeString,
+							Required: true,
+						},
+						"bridge": &schema.Schema{
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"tag": &schema.Schema{
+							Type:     schema.TypeInt,
+							Optional: true,
+						},
+						"firewall": &schema.Schema{
+							Type:     schema.TypeInt,
+							Optional: true,
+						},
+						"rate": &schema.Schema{
+							Type:     schema.TypeInt,
+							Optional: true,
+						},
+						"queues": &schema.Schema{
+							Type:     schema.TypeInt,
+							Optional: true,
+						},
+						"link_down": &schema.Schema{
+							Type:     schema.TypeInt,
+							Optional: true,
+						},
+					},
+				},
 			},
 			"os_type": {
 				Type:     schema.TypeString,
@@ -128,6 +168,8 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 	client := pconf.Client
 	vmName := d.Get("name").(string)
 	disk_gb := d.Get("disk_gb").(float64)
+	networks := d.Get("network").(*schema.Set)
+	qemuNetworks := formatQemuNetworks(networks)
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
 		Description:  d.Get("desc").(string),
@@ -137,6 +179,8 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 		QemuSockets:  d.Get("sockets").(int),
 		DiskSize:     disk_gb,
 		QemuOs:       d.Get("qemu_os").(string),
+		QemuNetworks: qemuNetworks,
+		// Deprecated.
 		QemuNicModel: d.Get("nic").(string),
 		QemuBrige:    d.Get("bridge").(string),
 		QemuVlanTag:  d.Get("vlan").(int),
@@ -286,6 +330,9 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	}
 	vmName := d.Get("name").(string)
 	disk_gb := d.Get("disk_gb").(float64)
+    networks := d.Get("network").(*schema.Set)
+    qemuNetworks := formatQemuNetworks(networks)
+
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
 		Description:  d.Get("desc").(string),
@@ -295,6 +342,8 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 		QemuSockets:  d.Get("sockets").(int),
 		DiskSize:     disk_gb,
 		QemuOs:       d.Get("qemu_os").(string),
+		QemuNetworks: qemuNetworks,
+		// Deprecated.
 		QemuNicModel: d.Get("nic").(string),
 		QemuBrige:    d.Get("bridge").(string),
 		QemuVlanTag:  d.Get("vlan").(int),
@@ -364,6 +413,8 @@ func resourceVmQemuRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("sockets", config.QemuSockets)
 	d.Set("disk_gb", config.DiskSize)
 	d.Set("qemu_os", config.QemuOs)
+	d.Set("network", config.QemuNetworks)
+	// Deprecated.
 	d.Set("nic", config.QemuNicModel)
 	d.Set("bridge", config.QemuBrige)
 	d.Set("vlan", config.QemuVlanTag)
@@ -408,4 +459,15 @@ func prepareDiskSize(client *pxapi.Client, vmr *pxapi.VmRef, disk_gb float64) er
 		}
 	}
 	return nil
+}
+
+func formatQemuNetworks(networks *schema.Set) []interface{} {
+
+	var qemuNetworks []interface{}
+
+	for _, network := range networks.List() {
+		qemuNetworks = append(qemuNetworks, network)
+	}
+
+	return qemuNetworks
 }

@@ -1,4 +1,4 @@
-# Proxmox  4 Terraform
+# Proxmox 4 Terraform
 
 Terraform provider plugin for proxmox
 
@@ -44,8 +44,15 @@ resource "proxmox_vm_qemu" "test" {
 	sockets = 1
 	memory = 2560
 	disk_gb = 4
-	nic = "virtio"
-	bridge = "vmbr1"
+	network {
+		id = 0
+		model = "virtio"
+	}
+	network {
+		id = 1
+		model = "virtio"
+		bridge = "vmbr1"
+	}
 	ssh_forward_ip = "10.0.0.1"
 	ssh_user = "terraform"
 	ssh_private_key = <<EOF
