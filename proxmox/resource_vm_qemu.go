@@ -158,6 +158,11 @@ func resourceVmQemu() *schema.Resource {
 				Optional: true,
 				Default:  false,
 			},
+			"preprovision": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+			},
 		},
 	}
 }
@@ -273,49 +278,52 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 		pmParallelEnd(pconf)
 		return err
 	}
-	log.Print("[DEBUG] setting up SSH forward")
-	sshPort, err := pxapi.SshForwardUsernet(vmr, client)
-	if err != nil {
+
+	preProvision := d.Get("preprovision").(bool)
+	if preProvision {
+		log.Print("[DEBUG] setting up SSH forward")
+		sshPort, err := pxapi.SshForwardUsernet(vmr, client)
+		if err != nil {
+			pmParallelEnd(pconf)
+			return err
+		}
+
+		// Done with proxmox API, end parallel and do the SSH things
 		pmParallelEnd(pconf)
-		return err
-	}
 
-	// Done with proxmox API, end parallel and do the SSH things
-	pmParallelEnd(pconf)
+		d.SetConnInfo(map[string]string{
+			"type":        "ssh",
+			"host":        d.Get("ssh_forward_ip").(string),
+			"port":        sshPort,
+			"user":        d.Get("ssh_user").(string),
+			"private_key": d.Get("ssh_private_key").(string),
+			"pm_api_url":  client.ApiUrl,
+			"pm_user":     client.Username,
+			"pm_password": client.Password,
+		})
 
-	d.SetConnInfo(map[string]string{
-		"type":        "ssh",
-		"host":        d.Get("ssh_forward_ip").(string),
-		"port":        sshPort,
-		"user":        d.Get("ssh_user").(string),
-		"private_key": d.Get("ssh_private_key").(string),
-		"pm_api_url":  client.ApiUrl,
-		"pm_user":     client.Username,
-		"pm_password": client.Password,
-	})
+		switch d.Get("os_type").(string) {
 
-	switch d.Get("os_type").(string) {
+		case "ubuntu":
+			// give sometime to bootup
+			time.Sleep(9 * time.Second)
+			err = preProvisionUbuntu(d)
+			if err != nil {
+				return err
+			}
 
-	case "ubuntu":
-		// give sometime to bootup
-		time.Sleep(9 * time.Second)
-		err = preProvisionUbuntu(d)
-		if err != nil {
-			return err
+		case "centos":
+			// give sometime to bootup
+			time.Sleep(9 * time.Second)
+			err = preProvisionCentos(d)
+			if err != nil {
+				return err
+			}
+
+		default:
+			return fmt.Errorf("Unknown os_type: %s", d.Get("os_type").(string))
 		}
-
-	case "centos":
-		// give sometime to bootup
-		time.Sleep(9 * time.Second)
-		err = preProvisionCentos(d)
-		if err != nil {
-			return err
-		}
-
-	default:
-		return fmt.Errorf("Unknown os_type: %s", d.Get("os_type").(string))
 	}
-
 	return nil
 }
 
@@ -330,8 +338,8 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	}
 	vmName := d.Get("name").(string)
 	disk_gb := d.Get("disk_gb").(float64)
-    networks := d.Get("network").(*schema.Set)
-    qemuNetworks := formatQemuNetworks(networks)
+	networks := d.Get("network").(*schema.Set)
+	qemuNetworks := formatQemuNetworks(networks)
 
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
@@ -371,19 +379,23 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	sshPort, err := pxapi.SshForwardUsernet(vmr, client)
-	if err != nil {
+	preProvision := d.Get("preprovision").(bool)
+	if preProvision {
+		sshPort, err := pxapi.SshForwardUsernet(vmr, client)
+		if err != nil {
+			pmParallelEnd(pconf)
+			return err
+		}
+		d.SetConnInfo(map[string]string{
+			"type":        "ssh",
+			"host":        d.Get("ssh_forward_ip").(string),
+			"port":        sshPort,
+			"user":        d.Get("ssh_user").(string),
+			"private_key": d.Get("ssh_private_key").(string),
+		})
+
 		pmParallelEnd(pconf)
-		return err
 	}
-	d.SetConnInfo(map[string]string{
-		"type":        "ssh",
-		"host":        d.Get("ssh_forward_ip").(string),
-		"port":        sshPort,
-		"user":        d.Get("ssh_user").(string),
-		"private_key": d.Get("ssh_private_key").(string),
-	})
-	pmParallelEnd(pconf)
 
 	// give sometime to bootup
 	time.Sleep(9 * time.Second)
