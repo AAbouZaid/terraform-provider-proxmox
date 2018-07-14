@@ -91,6 +91,7 @@ func resourceVmQemu() *schema.Resource {
 			"network": &schema.Schema{
 				Type:     schema.TypeSet,
 				Optional: true,
+				DiffSuppressFunc: suppressNetworksDiffs,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"id": &schema.Schema{
@@ -161,7 +162,7 @@ func resourceVmQemu() *schema.Resource {
 			"preprovision": {
 				Type:     schema.TypeBool,
 				Optional: true,
-				Default:  false,
+				Default:  true,
 			},
 		},
 	}
@@ -482,4 +483,10 @@ func formatQemuNetworks(networks *schema.Set) []interface{} {
 	}
 
 	return qemuNetworks
+}
+
+func suppressNetworksDiffs(k, old, new string, d *schema.ResourceData) bool {
+	// TODO: impemenet getting the difference between current and active config.
+    // This will always add the nic with new mac address.
+    return false
 }
