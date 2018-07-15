@@ -91,7 +91,6 @@ func resourceVmQemu() *schema.Resource {
 			"network": &schema.Schema{
 				Type:     schema.TypeSet,
 				Optional: true,
-				DiffSuppressFunc: suppressNetworksDiffs,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"id": &schema.Schema{
@@ -105,26 +104,32 @@ func resourceVmQemu() *schema.Resource {
 						"bridge": &schema.Schema{
 							Type:     schema.TypeString,
 							Optional: true,
+							Default:  "nat",
 						},
 						"tag": &schema.Schema{
 							Type:     schema.TypeInt,
 							Optional: true,
+							Default:  -1,
 						},
 						"firewall": &schema.Schema{
 							Type:     schema.TypeInt,
 							Optional: true,
+							Default:  -1,
 						},
 						"rate": &schema.Schema{
 							Type:     schema.TypeInt,
 							Optional: true,
+							Default:  -1,
 						},
 						"queues": &schema.Schema{
 							Type:     schema.TypeInt,
 							Optional: true,
+							Default:  -1,
 						},
 						"link_down": &schema.Schema{
 							Type:     schema.TypeInt,
 							Optional: true,
+							Default:  -1,
 						},
 					},
 				},
@@ -339,8 +344,35 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	}
 	vmName := d.Get("name").(string)
 	disk_gb := d.Get("disk_gb").(float64)
+
 	networks := d.Get("network").(*schema.Set)
 	qemuNetworks := formatQemuNetworks(networks)
+	currentConf, err := pxapi.NewConfigQemuFromApi(vmr, client)
+
+	//
+	macAddrss := map[int]string{}
+	for _, nic := range currentConf.QemuNetworks {
+		for nicID, nicConf := range nic {
+			nicConfMap := nicConf.(map[string]interface{})
+			model := nicConfMap["model"].(string)
+			modelConf := strings.Split(model, "=")
+			macAddrss[nicID] = modelConf[1]
+		}
+	}
+
+	//
+	qemuNetworksUpdated := []map[int]interface{}{}
+	for _, nic := range qemuNetworks {
+
+		for nicID, nicConf := range nic {
+			nicConfMap := nicConf.(map[string]interface{})
+			nicConfMap["model"] = fmt.Sprintf("%v=%v", nicConfMap["model"], macAddrss[nicID])
+			nicConfMapUpdated := map[int]interface{}{
+				nicID: nicConfMap,
+			}
+			qemuNetworksUpdated = append(qemuNetworksUpdated, nicConfMapUpdated)
+		}
+	}
 
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
@@ -351,7 +383,7 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 		QemuSockets:  d.Get("sockets").(int),
 		DiskSize:     disk_gb,
 		QemuOs:       d.Get("qemu_os").(string),
-		QemuNetworks: qemuNetworks,
+		QemuNetworks: qemuNetworksUpdated,
 		// Deprecated.
 		QemuNicModel: d.Get("nic").(string),
 		QemuBrige:    d.Get("bridge").(string),
@@ -474,19 +506,21 @@ func prepareDiskSize(client *pxapi.Client, vmr *pxapi.VmRef, disk_gb float64) er
 	return nil
 }
 
-func formatQemuNetworks(networks *schema.Set) []interface{} {
+func formatQemuNetworks(networks *schema.Set) []map[int]interface{} {
 
-	var qemuNetworks []interface{}
+	var qemuNetworks []map[int]interface{}
 
 	for _, network := range networks.List() {
-		qemuNetworks = append(qemuNetworks, network)
+		networkMap, isMap := network.(map[string]interface{})
+		if isMap {
+			nicID := networkMap["id"].(int)
+			delete(networkMap, "id")
+			networkConf := map[int]interface{}{
+				nicID: networkMap,
+			}
+			qemuNetworks = append(qemuNetworks, networkConf)
+		}
 	}
 
 	return qemuNetworks
-}
-
-func suppressNetworksDiffs(k, old, new string, d *schema.ResourceData) bool {
-	// TODO: impemenet getting the difference between current and active config.
-    // This will always add the nic with new mac address.
-    return false
 }
