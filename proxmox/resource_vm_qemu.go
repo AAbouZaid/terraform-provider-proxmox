@@ -100,7 +100,7 @@ func resourceVmQemu() *schema.Resource {
 							Type:     schema.TypeInt,
 							Required: true,
 						},
-						"model": &schema.Schema{
+						"type": &schema.Schema{
 							Type:     schema.TypeString,
 							Required: true,
 						},
@@ -406,9 +406,9 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	for _, nic := range currentConf.QemuNetworks {
 		for nicID, nicConf := range nic {
 			nicConfMap := nicConf.(map[string]interface{})
-			model := nicConfMap["model"].(string)
-			modelConf := strings.Split(model, "=")
-			macAddrss[nicID] = modelConf[1]
+			nicType := nicConfMap["type"].(string)
+			typeConf := strings.Split(nicType, "=")
+			macAddrss[nicID] = typeConf[1]
 		}
 	}
 
@@ -418,7 +418,7 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 
 		for nicID, nicConf := range nic {
 			nicConfMap := nicConf.(map[string]interface{})
-			nicConfMap["model"] = fmt.Sprintf("%v=%v", nicConfMap["model"], macAddrss[nicID])
+			nicConfMap["type"] = fmt.Sprintf("%v=%v", nicConfMap["type"], macAddrss[nicID])
 			nicConfMapUpdated := map[int]interface{}{
 				nicID: nicConfMap,
 			}
