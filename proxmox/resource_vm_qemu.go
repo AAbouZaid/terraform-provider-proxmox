@@ -78,15 +78,18 @@ func resourceVmQemu() *schema.Resource {
 			"nic": {
 				Type:     schema.TypeString,
 				Optional: true,
+				Deprecated: "Use `network` instead",
 			},
 			"bridge": {
 				Type:     schema.TypeString,
 				Optional: true,
+				Deprecated: "Use `network.bridge` instead",
 			},
 			"vlan": {
 				Type:     schema.TypeInt,
 				Optional: true,
 				Default:  -1,
+				Deprecated: "Use `network.tag` instead",
 			},
 			"network": &schema.Schema{
 				Type:     schema.TypeSet,
