@@ -40,7 +40,7 @@ func resourceVmQemu() *schema.Resource {
 			},
 			"ssh_forward_ip": {
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
 			},
 			"iso": {
 				Type:     schema.TypeString,
@@ -224,9 +224,9 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 	disk_gb := d.Get("disk_gb").(float64)
 
 	networks := d.Get("network").(*schema.Set)
-	qemuNetworks := formatSets(networks)
+	qemuNetworks := devicesSetToMap(networks)
 	disks := d.Get("disk").(*schema.Set)
-	qemuDisks := formatSets(disks)
+	qemuDisks := devicesSetToMap(disks)
 
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
@@ -390,41 +390,25 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 		pmParallelEnd(pconf)
 		return err
 	}
-	currentConf, err := pxapi.NewConfigQemuFromApi(vmr, client)
 
 	vmName := d.Get("name").(string)
 	disk_gb := d.Get("disk_gb").(float64)
 
 	networks := d.Get("network").(*schema.Set)
-	qemuNetworks := formatSets(networks)
+	qemuNetworks := devicesSetToMap(networks)
 
 	disks := d.Get("disk").(*schema.Set)
-	qemuDisks := formatSets(disks)
+	qemuDisks := devicesSetToMap(disks)
 
 	//
-	macAddrss := map[int]string{}
-	for _, nic := range currentConf.QemuNetworks {
-		for nicID, nicConf := range nic {
-			nicConfMap := nicConf.(map[string]interface{})
-			nicType := nicConfMap["type"].(string)
-			typeConf := strings.Split(nicType, "=")
-			macAddrss[nicID] = typeConf[1]
-		}
-	}
-
-	//
-	qemuNetworksUpdated := []map[int]interface{}{}
-	for _, nic := range qemuNetworks {
-
-		for nicID, nicConf := range nic {
-			nicConfMap := nicConf.(map[string]interface{})
-			nicConfMap["type"] = fmt.Sprintf("%v=%v", nicConfMap["type"], macAddrss[nicID])
-			nicConfMapUpdated := map[int]interface{}{
-				nicID: nicConfMap,
-			}
-			qemuNetworksUpdated = append(qemuNetworksUpdated, nicConfMapUpdated)
-		}
-	}
+	// TODO: Retain mac adresses.
+	//currentConf, err := pxapi.NewConfigQemuFromApi(vmr, client)
+	//macAddrss := map[int]string{}
+	//for nicID, nicConfMap := range currentConf.QemuNetworks {
+	//	nicType := nicConfMap["type"].(string)
+	//	typeConf := strings.Split(nicType, "=")
+	//	macAddrss[nicID] = typeConf[1]
+	//}
 
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
@@ -434,7 +418,7 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 		QemuCores:    d.Get("cores").(int),
 		QemuSockets:  d.Get("sockets").(int),
 		QemuOs:       d.Get("qemu_os").(string),
-		QemuNetworks: qemuNetworksUpdated,
+		QemuNetworks: qemuNetworks,
 		QemuDisks:    qemuDisks,
 		// Deprecated.
 		QemuNicModel: d.Get("nic").(string),
@@ -501,6 +485,17 @@ func resourceVmQemuRead(d *schema.ResourceData, meta interface{}) error {
 		pmParallelEnd(pconf)
 		return err
 	}
+
+	// Get and compare networks values.
+	configNetworks := d.Get("network").(*schema.Set)
+	activeNetworks := config.QemuNetworks
+	qemuNetworks := updateDevicesSet(configNetworks, activeNetworks)
+
+	// Get and compare disks values.
+	configDisks := d.Get("disk").(*schema.Set)
+	activeDisks := config.QemuDisks
+	qemuDisks := updateDevicesSet(configDisks, activeDisks)
+
 	d.SetId(resourceId(vmr.Node(), "qemu", vmr.VmId()))
 	d.Set("target_node", vmr.Node())
 	d.Set("name", config.Name)
@@ -510,13 +505,19 @@ func resourceVmQemuRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("cores", config.QemuCores)
 	d.Set("sockets", config.QemuSockets)
 	d.Set("qemu_os", config.QemuOs)
-	d.Set("network", config.QemuNetworks)
-	d.Set("disk", config.QemuNetworks)
+	if qemuNetworks.Len() > 0 {
+		d.Set("network", qemuNetworks)
+	}
+	if qemuDisks.Len() > 0 {
+		d.Set("disk", qemuDisks)
+	}
+
 	// Deprecated.
 	d.Set("nic", config.QemuNicModel)
 	d.Set("bridge", config.QemuBrige)
 	d.Set("vlan", config.QemuVlanTag)
 	d.Set("disk_gb", config.DiskSize)
+
 	pmParallelEnd(pconf)
 	return nil
 }
@@ -560,20 +561,32 @@ func prepareDiskSize(client *pxapi.Client, vmr *pxapi.VmRef, disk_gb float64) er
 	return nil
 }
 
-func formatSets(sets *schema.Set) []map[int]interface{} {
+func devicesSetToMap(devicesSet *schema.Set) map[int]map[string]interface{} {
 
-	var nestedList []map[int]interface{}
+	devicesMap := map[int]map[string]interface{}{}
 
-	for _, set := range sets.List() {
+	for _, set := range devicesSet.List() {
 		setMap, isMap := set.(map[string]interface{})
 		if isMap {
 			setID := setMap["id"].(int)
-			setConf := map[int]interface{}{
-				setID: setMap,
-			}
-			nestedList = append(nestedList, setConf)
+			devicesMap[setID] = setMap
 		}
 	}
+	return devicesMap
+}
 
-	return nestedList
+func updateDevicesSet(devicesSet *schema.Set, devicesMap map[int]map[string]interface{}) *schema.Set {
+
+	for _, setConf := range devicesSet.List() {
+		devicesSet.Remove(setConf)
+		setConfMap := setConf.(map[string]interface{})
+		deviceID := setConfMap["id"].(int)
+		for key, value := range devicesMap[deviceID] {
+			// Value type should be one of types allowed by
+			// Terraform schema types.
+			setConfMap[key] = value
+			devicesSet.Add(setConfMap)
+		}
+	}
+	return devicesSet
 }
