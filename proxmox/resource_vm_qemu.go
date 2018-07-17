@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+type (
+	qemuDevices map[int]map[string]interface{}
+	qemuDevice  map[string]interface{}
+)
+
 func resourceVmQemu() *schema.Resource {
 	*pxapi.Debug = true
 	return &schema.Resource{
@@ -52,7 +57,7 @@ func resourceVmQemu() *schema.Resource {
 			},
 			"storage": {
 				Type:     schema.TypeString,
-				Required: true,
+				Optional: true,
 			},
 			"qemu_os": {
 				Type:     schema.TypeString,
@@ -73,7 +78,7 @@ func resourceVmQemu() *schema.Resource {
 			},
 			"disk_gb": {
 				Type:     schema.TypeFloat,
-				Required: true,
+				Optional: true,
 			},
 			"nic": {
 				Type:       schema.TypeString,
@@ -147,6 +152,10 @@ func resourceVmQemu() *schema.Resource {
 							Required: true,
 						},
 						"type": &schema.Schema{
+							Type:     schema.TypeString,
+							Required: true,
+						},
+						"storage": &schema.Schema{
 							Type:     schema.TypeString,
 							Required: true,
 						},
@@ -394,11 +403,13 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	vmName := d.Get("name").(string)
 	disk_gb := d.Get("disk_gb").(float64)
 
-	networks := d.Get("network").(*schema.Set)
-	qemuNetworks := devicesSetToMap(networks)
+	//activeConf, err := pxapi.NewConfigQemuFromApi(vmr, client)
 
-	disks := d.Get("disk").(*schema.Set)
-	qemuDisks := devicesSetToMap(disks)
+	configDisksSet := d.Get("disk").(*schema.Set)
+	configDisksMap := devicesSetToMap(configDisksSet)
+
+	configNetworksSet := d.Get("network").(*schema.Set)
+	configNetworksMap := devicesSetToMap(configNetworksSet)
 
 	//
 	// TODO: Retain mac adresses.
@@ -418,8 +429,8 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 		QemuCores:    d.Get("cores").(int),
 		QemuSockets:  d.Get("sockets").(int),
 		QemuOs:       d.Get("qemu_os").(string),
-		QemuNetworks: qemuNetworks,
-		QemuDisks:    qemuDisks,
+		QemuDisks:    configDisksMap,
+		QemuNetworks: configNetworksMap,
 		// Deprecated.
 		QemuNicModel: d.Get("nic").(string),
 		QemuBrige:    d.Get("bridge").(string),
@@ -486,16 +497,6 @@ func resourceVmQemuRead(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	// Get and compare networks values.
-	configNetworks := d.Get("network").(*schema.Set)
-	activeNetworks := config.QemuNetworks
-	qemuNetworks := updateDevicesSet(configNetworks, activeNetworks)
-
-	// Get and compare disks values.
-	configDisks := d.Get("disk").(*schema.Set)
-	activeDisks := config.QemuDisks
-	qemuDisks := updateDevicesSet(configDisks, activeDisks)
-
 	d.SetId(resourceId(vmr.Node(), "qemu", vmr.VmId()))
 	d.Set("target_node", vmr.Node())
 	d.Set("name", config.Name)
@@ -505,12 +506,20 @@ func resourceVmQemuRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("cores", config.QemuCores)
 	d.Set("sockets", config.QemuSockets)
 	d.Set("qemu_os", config.QemuOs)
-	if qemuNetworks.Len() > 0 {
-		d.Set("network", qemuNetworks)
-	}
-	if qemuDisks.Len() > 0 {
-		d.Set("disk", qemuDisks)
-	}
+
+	// Disks.
+	configDisksSet := d.Get("disk").(*schema.Set)
+	configDisksMap := devicesSetToMap(configDisksSet)
+	activeDisksMap := updateDevicesDefaults(config.QemuDisks, configDisksMap)
+	configDisksSetUpdated := updateDevicesSet(configDisksSet, activeDisksMap)
+	d.Set("disk", configDisksSetUpdated)
+
+	// Networks.
+	configNetworksSet := d.Get("network").(*schema.Set)
+	configNetworksMap := devicesSetToMap(configNetworksSet)
+	activeNetworksMap := updateDevicesDefaults(config.QemuNetworks, configNetworksMap)
+	configNetworksSetUpdated := updateDevicesSet(configNetworksSet, activeNetworksMap)
+	d.Set("network", configNetworksSetUpdated)
 
 	// Deprecated.
 	d.Set("nic", config.QemuNicModel)
@@ -575,7 +584,10 @@ func devicesSetToMap(devicesSet *schema.Set) map[int]map[string]interface{} {
 	return devicesMap
 }
 
-func updateDevicesSet(devicesSet *schema.Set, devicesMap map[int]map[string]interface{}) *schema.Set {
+func updateDevicesSet(
+	devicesSet *schema.Set,
+	devicesMap map[int]map[string]interface{},
+) *schema.Set {
 
 	for _, setConf := range devicesSet.List() {
 		devicesSet.Remove(setConf)
@@ -589,4 +601,22 @@ func updateDevicesSet(devicesSet *schema.Set, devicesMap map[int]map[string]inte
 		}
 	}
 	return devicesSet
+}
+
+func updateDevicesDefaults(
+	activeDevicesMap map[int]map[string]interface{},
+	configDevicesMap map[int]map[string]interface{},
+) map[int]map[string]interface{} {
+
+	for deviceID, deviceConf := range configDevicesMap {
+		if _, ok := activeDevicesMap[deviceID]; !ok {
+			activeDevicesMap[deviceID] = configDevicesMap[deviceID]
+		}
+		for key, value := range deviceConf {
+			if _, ok := activeDevicesMap[deviceID][key]; !ok {
+				activeDevicesMap[deviceID][key] = value
+			}
+		}
+	}
+	return activeDevicesMap
 }
