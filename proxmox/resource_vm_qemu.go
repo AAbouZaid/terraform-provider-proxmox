@@ -11,11 +11,6 @@ import (
 	"time"
 )
 
-type (
-	qemuDevices map[int]map[string]interface{}
-	qemuDevice  map[string]interface{}
-)
-
 func resourceVmQemu() *schema.Resource {
 	*pxapi.Debug = true
 	return &schema.Resource{
@@ -570,12 +565,12 @@ func prepareDiskSize(client *pxapi.Client, vmr *pxapi.VmRef, disk_gb float64) er
 	return nil
 }
 
-func devicesSetToMap(devicesSet *schema.Set) map[int]map[string]interface{} {
+func devicesSetToMap(devicesSet *schema.Set) pxapi.QemuDevices {
 
-	devicesMap := map[int]map[string]interface{}{}
+	devicesMap := pxapi.QemuDevices{}
 
 	for _, set := range devicesSet.List() {
-		setMap, isMap := set.(map[string]interface{})
+		setMap, isMap := set.(pxapi.QemuDevice)
 		if isMap {
 			setID := setMap["id"].(int)
 			devicesMap[setID] = setMap
@@ -586,12 +581,12 @@ func devicesSetToMap(devicesSet *schema.Set) map[int]map[string]interface{} {
 
 func updateDevicesSet(
 	devicesSet *schema.Set,
-	devicesMap map[int]map[string]interface{},
+	devicesMap pxapi.QemuDevices,
 ) *schema.Set {
 
 	for _, setConf := range devicesSet.List() {
 		devicesSet.Remove(setConf)
-		setConfMap := setConf.(map[string]interface{})
+		setConfMap := setConf.(pxapi.QemuDevice)
 		deviceID := setConfMap["id"].(int)
 		for key, value := range devicesMap[deviceID] {
 			// Value type should be one of types allowed by
@@ -604,9 +599,9 @@ func updateDevicesSet(
 }
 
 func updateDevicesDefaults(
-	activeDevicesMap map[int]map[string]interface{},
-	configDevicesMap map[int]map[string]interface{},
-) map[int]map[string]interface{} {
+	activeDevicesMap pxapi.QemuDevices,
+	configDevicesMap pxapi.QemuDevices,
+) pxapi.QemuDevices {
 
 	for deviceID, deviceConf := range configDevicesMap {
 		if _, ok := activeDevicesMap[deviceID]; !ok {
