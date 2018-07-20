@@ -42,6 +42,11 @@ func resourceVmQemu() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
+			"onboot": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  true,
+			},
 			"iso": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -235,6 +240,7 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
 		Description:  d.Get("desc").(string),
+		Onboot:       Btoi(d.Get("onboot").(bool)),
 		Storage:      d.Get("storage").(string),
 		Memory:       d.Get("memory").(int),
 		QemuCores:    d.Get("cores").(int),
@@ -419,6 +425,7 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
 		Description:  d.Get("desc").(string),
+		Onboot:       Btoi(d.Get("onboot").(bool)),
 		Storage:      d.Get("storage").(string),
 		Memory:       d.Get("memory").(int),
 		QemuCores:    d.Get("cores").(int),
@@ -496,6 +503,7 @@ func resourceVmQemuRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("target_node", vmr.Node())
 	d.Set("name", config.Name)
 	d.Set("desc", config.Description)
+	d.Set("onboot", Itob(config.Onboot))
 	d.Set("storage", config.Storage)
 	d.Set("memory", config.Memory)
 	d.Set("cores", config.QemuCores)
