@@ -38,10 +38,6 @@ func resourceVmQemu() *schema.Resource {
 				Type:     schema.TypeString,
 				Required: true,
 			},
-			"ssh_forward_ip": {
-				Type:     schema.TypeString,
-				Optional: true,
-			},
 			"onboot": {
 				Type:     schema.TypeBool,
 				Optional: true,
@@ -198,6 +194,10 @@ func resourceVmQemu() *schema.Resource {
 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
 					return strings.TrimSpace(old) == strings.TrimSpace(new)
 				},
+			},
+			"ssh_forward_ip": {
+				Type:     schema.TypeString,
+				Optional: true,
 			},
 			"ssh_user": {
 				Type:     schema.TypeString,
@@ -579,7 +579,7 @@ func devicesSetToMap(devicesSet *schema.Set) pxapi.QemuDevices {
 	devicesMap := pxapi.QemuDevices{}
 
 	for _, set := range devicesSet.List() {
-		setMap, isMap := set.(pxapi.QemuDevice)
+		setMap, isMap := set.(map[string]interface{})
 		if isMap {
 			setID := setMap["id"].(int)
 			devicesMap[setID] = setMap
@@ -595,7 +595,7 @@ func updateDevicesSet(
 
 	for _, setConf := range devicesSet.List() {
 		devicesSet.Remove(setConf)
-		setConfMap := setConf.(pxapi.QemuDevice)
+		setConfMap := setConf.(map[string]interface{})
 		deviceID := setConfMap["id"].(int)
 		for key, value := range devicesMap[deviceID] {
 			// Value type should be one of types allowed by
