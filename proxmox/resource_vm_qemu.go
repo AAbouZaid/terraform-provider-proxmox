@@ -115,9 +115,10 @@ func resourceVmQemu() *schema.Resource {
 							Default:  "nat",
 						},
 						"tag": &schema.Schema{
-							Type:     schema.TypeInt,
-							Optional: true,
-							Default:  -1,
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "VLAN tag.",
+							Default:     -1,
 						},
 						"firewall": &schema.Schema{
 							Type:     schema.TypeInt,
