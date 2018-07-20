@@ -117,9 +117,9 @@ func resourceVmQemu() *schema.Resource {
 							Default:     -1,
 						},
 						"firewall": &schema.Schema{
-							Type:     schema.TypeInt,
+							Type:     schema.TypeBool,
 							Optional: true,
-							Default:  -1,
+							Default:  false,
 						},
 						"rate": &schema.Schema{
 							Type:     schema.TypeInt,
@@ -132,9 +132,9 @@ func resourceVmQemu() *schema.Resource {
 							Default:  -1,
 						},
 						"link_down": &schema.Schema{
-							Type:     schema.TypeInt,
+							Type:     schema.TypeBool,
 							Optional: true,
-							Default:  -1,
+							Default:  false,
 						},
 					},
 				},
@@ -166,19 +166,19 @@ func resourceVmQemu() *schema.Resource {
 							Default:  "none",
 						},
 						"backup": &schema.Schema{
-							Type:     schema.TypeInt,
+							Type:     schema.TypeBool,
 							Optional: true,
-							Default:  -1,
+							Default:  false,
 						},
 						"iothread": &schema.Schema{
-							Type:     schema.TypeInt,
+							Type:     schema.TypeBool,
 							Optional: true,
-							Default:  -1,
+							Default:  false,
 						},
 						"replicate": &schema.Schema{
-							Type:     schema.TypeInt,
+							Type:     schema.TypeBool,
 							Optional: true,
-							Default:  -1,
+							Default:  false,
 						},
 					},
 				},
@@ -241,7 +241,7 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
 		Description:  d.Get("desc").(string),
-		Onboot:       Btoi(d.Get("onboot").(bool)),
+		Onboot:       d.Get("onboot").(bool),
 		Storage:      d.Get("storage").(string),
 		Memory:       d.Get("memory").(int),
 		QemuCores:    d.Get("cores").(int),
@@ -426,7 +426,7 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
 		Description:  d.Get("desc").(string),
-		Onboot:       Btoi(d.Get("onboot").(bool)),
+		Onboot:       d.Get("onboot").(bool),
 		Storage:      d.Get("storage").(string),
 		Memory:       d.Get("memory").(int),
 		QemuCores:    d.Get("cores").(int),
@@ -504,7 +504,7 @@ func resourceVmQemuRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("target_node", vmr.Node())
 	d.Set("name", config.Name)
 	d.Set("desc", config.Description)
-	d.Set("onboot", Itob(config.Onboot))
+	d.Set("onboot", config.Onboot)
 	d.Set("storage", config.Storage)
 	d.Set("memory", config.Memory)
 	d.Set("cores", config.QemuCores)
@@ -513,17 +513,13 @@ func resourceVmQemuRead(d *schema.ResourceData, meta interface{}) error {
 
 	// Disks.
 	configDisksSet := d.Get("disk").(*schema.Set)
-	configDisksMap := devicesSetToMap(configDisksSet)
-	activeDisksMap := updateDevicesDefaults(config.QemuDisks, configDisksMap)
-	configDisksSetUpdated := updateDevicesSet(configDisksSet, activeDisksMap)
-	d.Set("disk", configDisksSetUpdated)
+	activeDisksSet := updateDevicesSet(configDisksSet, config.QemuDisks)
+	d.Set("disk", activeDisksSet)
 
 	// Networks.
 	configNetworksSet := d.Get("network").(*schema.Set)
-	configNetworksMap := devicesSetToMap(configNetworksSet)
-	activeNetworksMap := updateDevicesDefaults(config.QemuNetworks, configNetworksMap)
-	configNetworksSetUpdated := updateDevicesSet(configNetworksSet, activeNetworksMap)
-	d.Set("network", configNetworksSetUpdated)
+	activeNetworksSet := updateDevicesSet(configNetworksSet, config.QemuNetworks)
+	d.Set("network", activeNetworksSet)
 
 	// Deprecated.
 	d.Set("nic", config.QemuNicModel)
@@ -593,17 +589,41 @@ func updateDevicesSet(
 	devicesMap pxapi.QemuDevices,
 ) *schema.Set {
 
+	configDevicesMap := devicesSetToMap(devicesSet)
+	activeDevicesMap := updateDevicesDefaults(devicesMap, configDevicesMap)
+
 	for _, setConf := range devicesSet.List() {
 		devicesSet.Remove(setConf)
 		setConfMap := setConf.(map[string]interface{})
 		deviceID := setConfMap["id"].(int)
-		for key, value := range devicesMap[deviceID] {
-			// Value type should be one of types allowed by
-			// Terraform schema types.
-			setConfMap[key] = value
+		// Value type should be one of types allowed by Terraform schema types.
+		for key, value := range activeDevicesMap[deviceID] {
+			// This nested switch is used for nested config like in `net[n]`,
+			// where Proxmox uses `key=<0|1>` in string" at the same time
+			// a boolean could be used in ".tf" files.
+			switch setConfMap[key].(type) {
+			case bool:
+				switch value.(type) {
+				// If the key is bool and value is int (which comes from Proxmox API),
+				// should be converted to bool (as in ".tf" conf).
+				case int:
+					sValue := strconv.Itoa(value.(int))
+					bValue, err := strconv.ParseBool(sValue)
+					if err == nil {
+						setConfMap[key] = bValue
+					}
+				// If value is bool, which comes from Terraform conf, add it directly.
+				case bool:
+					setConfMap[key] = value
+				}
+			// Anything else will be added as it is.
+			default:
+				setConfMap[key] = value
+			}
 			devicesSet.Add(setConfMap)
 		}
 	}
+
 	return devicesSet
 }
 
