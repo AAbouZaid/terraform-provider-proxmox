@@ -101,9 +101,14 @@ func resourceVmQemu() *schema.Resource {
 							Type:     schema.TypeInt,
 							Required: true,
 						},
-						"type": &schema.Schema{
+						"model": &schema.Schema{
 							Type:     schema.TypeString,
 							Required: true,
+						},
+						"macaddr": &schema.Schema{
+							// TODO: Find a way to set MAC address in .tf config.
+							Type:     schema.TypeString,
+							Computed: true,
 						},
 						"bridge": &schema.Schema{
 							Type:     schema.TypeString,
@@ -405,23 +410,11 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	vmName := d.Get("name").(string)
 	disk_gb := d.Get("disk_gb").(float64)
 
-	//activeConf, err := pxapi.NewConfigQemuFromApi(vmr, client)
-
 	configDisksSet := d.Get("disk").(*schema.Set)
 	configDisksMap := devicesSetToMap(configDisksSet)
 
 	configNetworksSet := d.Get("network").(*schema.Set)
 	configNetworksMap := devicesSetToMap(configNetworksSet)
-
-	//
-	// TODO: Retain mac adresses.
-	//currentConf, err := pxapi.NewConfigQemuFromApi(vmr, client)
-	//macAddrss := map[int]string{}
-	//for nicID, nicConfMap := range currentConf.QemuNetworks {
-	//	nicType := nicConfMap["type"].(string)
-	//	typeConf := strings.Split(nicType, "=")
-	//	macAddrss[nicID] = typeConf[1]
-	//}
 
 	config := pxapi.ConfigQemu{
 		Name:         vmName,
