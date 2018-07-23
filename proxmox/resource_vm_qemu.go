@@ -161,9 +161,20 @@ func resourceVmQemu() *schema.Resource {
 							Type:     schema.TypeString,
 							Required: true,
 						},
+						"storage_type": &schema.Schema{
+							Type:        schema.TypeString,
+							Optional:    true,
+							Default:     "dir",
+							Description: "One of PVE types as described: https://pve.proxmox.com/wiki/Storage",
+						},
 						"size": &schema.Schema{
 							Type:     schema.TypeString,
 							Required: true,
+						},
+						"format": &schema.Schema{
+							Type:     schema.TypeString,
+							Optional: true,
+							Default:  "raw",
 						},
 						"cache": &schema.Schema{
 							Type:     schema.TypeString,
