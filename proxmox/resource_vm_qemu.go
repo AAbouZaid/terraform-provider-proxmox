@@ -502,6 +502,7 @@ func resourceVmQemuDelete(d *schema.ResourceData, meta interface{}) error {
 	return err
 }
 
+// Increase disk size if original disk was smaller than new disk.
 func prepareDiskSize(
 	client *pxapi.Client,
 	vmr *pxapi.VmRef,
@@ -526,6 +527,8 @@ func prepareDiskSize(
 	return nil
 }
 
+// Converting from schema.TypeSet to map of id and conf for each device,
+// which will be sent to Proxmox API.
 func devicesSetToMap(devicesSet *schema.Set) pxapi.QemuDevices {
 
 	devicesMap := pxapi.QemuDevices{}
@@ -540,6 +543,8 @@ func devicesSetToMap(devicesSet *schema.Set) pxapi.QemuDevices {
 	return devicesMap
 }
 
+// Update schema.TypeSet with new values comes from Proxmox API.
+// TODO: Maybe it's better to create a new Set instead add to current one.
 func updateDevicesSet(
 	devicesSet *schema.Set,
 	devicesMap pxapi.QemuDevices,
@@ -583,6 +588,9 @@ func updateDevicesSet(
 	return devicesSet
 }
 
+// Because default values are not stored in Proxmox, so the API returns only active values.
+// So to prevent Terraform doing unnecessary diffs, this function reads default values
+// from Terraform itself, and fill empty fields.
 func updateDevicesDefaults(
 	activeDevicesMap pxapi.QemuDevices,
 	configDevicesMap pxapi.QemuDevices,
@@ -601,6 +609,7 @@ func updateDevicesDefaults(
 	return activeDevicesMap
 }
 
+// Internal pre-provision.
 func preprovision(
 	d *schema.ResourceData,
 	pconf *providerConfiguration,
