@@ -417,8 +417,12 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	// give sometime to proxmox to catchup
 	time.Sleep(5 * time.Second)
 
-	log.Print("[DEBUG] starting VM")
-	_, err = client.StartVm(vmr)
+	// Start VM only if it wasn't running.
+	vmState, err := client.GetVmState(vmr)
+	if err == nil && vmState["status"] == "stopped" {
+		log.Print("[DEBUG] starting VM")
+		_, err = client.StartVm(vmr)
+	}
 
 	if err != nil {
 		pmParallelEnd(pconf)
