@@ -314,7 +314,7 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 			// give sometime to proxmox to catchup
 			time.Sleep(5 * time.Second)
 
-			err = prepareDiskSize(client, vmr, disk_gb)
+			err = prepareDiskSize(client, vmr, qemuDisks)
 			if err != nil {
 				pmParallelEnd(pconf)
 				return err
@@ -342,7 +342,7 @@ func resourceVmQemuCreate(d *schema.ResourceData, meta interface{}) error {
 		// give sometime to proxmox to catchup
 		time.Sleep(5 * time.Second)
 
-		err = prepareDiskSize(client, vmr, disk_gb)
+		err = prepareDiskSize(client, vmr, qemuDisks)
 		if err != nil {
 			pmParallelEnd(pconf)
 			return err
@@ -412,7 +412,7 @@ func resourceVmQemuUpdate(d *schema.ResourceData, meta interface{}) error {
 	// give sometime to proxmox to catchup
 	time.Sleep(5 * time.Second)
 
-	prepareDiskSize(client, vmr, disk_gb)
+	prepareDiskSize(client, vmr, configDisksMap)
 
 	// give sometime to proxmox to catchup
 	time.Sleep(5 * time.Second)
@@ -502,16 +502,25 @@ func resourceVmQemuDelete(d *schema.ResourceData, meta interface{}) error {
 	return err
 }
 
-func prepareDiskSize(client *pxapi.Client, vmr *pxapi.VmRef, disk_gb float64) error {
-	clonedConfig, err := pxapi.NewConfigQemuFromApi(vmr, client)
-	if err != nil {
-		return err
-	}
-	if disk_gb > clonedConfig.DiskSize {
-		log.Print("[DEBUG] resizing disk")
-		_, err = client.ResizeQemuDisk(vmr, "virtio0", int(disk_gb-clonedConfig.DiskSize))
+func prepareDiskSize(
+	client *pxapi.Client,
+	vmr *pxapi.VmRef,
+	diskConfMap pxapi.QemuDevices,
+) error {
+	for diskID, diskConf := range diskConfMap {
+		diskName := fmt.Sprintf("%v%v", diskConf["type"], diskID)
+		diskSizeGB := diskConf["size"].(string)
+		diskSize, _ := strconv.ParseFloat(strings.Trim(diskSizeGB, "G"), 64)
+		clonedConfig, err := pxapi.NewConfigQemuFromApi(vmr, client)
 		if err != nil {
 			return err
+		}
+		if diskSize > clonedConfig.DiskSize {
+			log.Print("[DEBUG] resizing disk " + diskName)
+			_, err = client.ResizeQemuDisk(vmr, diskName, int(diskSize-clonedConfig.DiskSize))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
