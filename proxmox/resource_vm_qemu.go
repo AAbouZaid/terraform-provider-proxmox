@@ -234,9 +234,10 @@ func resourceVmQemu() *schema.Resource {
 				Default:  false,
 			},
 			"preprovision": {
-				Type:     schema.TypeBool,
-				Optional: true,
-				Default:  true,
+				Type:          schema.TypeBool,
+				Optional:      true,
+				Default:       true,
+				ConflictsWith: []string{"ssh_forward_ip", "ssh_user", "ssh_private_key", "os_type", "os_network_config"},
 			},
 		},
 	}

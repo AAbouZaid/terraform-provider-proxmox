@@ -94,10 +94,11 @@ Optimally, you could create a VM resource you will use a clone base with an ISO,
 
 Interesting parameters:
 
+**preprovision** - to enable or disable internal pre-provisioning (e.g. if you already have another way to provision VMs). Conflicts with: `ssh_forward_ip`, `ssh_user`, `ssh_private_key`, `os_type`, `os_network_config`.
+
 **ssh_forward_ip** - should be the IP or hostname of the target node or bridge IP. This is where proxmox will create a port forward to your VM with via a user_net.
 
 **os_type** - ubuntu (https://github.com/Telmate/terraform-ubuntu-proxmox-iso) or centos (TODO: centos iso template)
-
 
 ### Preprovision (internal)
 
