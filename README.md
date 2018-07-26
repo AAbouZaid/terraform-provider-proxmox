@@ -39,11 +39,9 @@ resource "proxmox_vm_qemu" "test" {
 	target_node = "proxmox1-xx"
 
 	clone = "terraform-ubuntu1404-template"
-	storage = "local"
 	cores = 3
 	sockets = 1
 	memory = 2560
-	disk_gb = 4
 	network {
 		id = 0
 		model = "virtio"
@@ -53,6 +51,15 @@ resource "proxmox_vm_qemu" "test" {
 		model = "virtio"
 		bridge = "vmbr1"
 	}
+	disk {
+		id = 0
+		type = virtio
+		storage = local-lvm
+		storage_type = lvm
+		size = 30G
+		backup = true
+	}
+	preprovision = true
 	ssh_forward_ip = "10.0.0.1"
 	ssh_user = "terraform"
 	ssh_private_key = <<EOF
@@ -79,6 +86,7 @@ EOF
 }
 
 ```
+
 ### Provider usage
 You can start from either an ISO or clone an existing VM.
 
